@@ -1,5 +1,4 @@
 #include <juce_audio_processors/juce_audio_processors.h>
-#include <juce_audio_processors/format_types/juce_VST3PluginFormat.h>
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_gui_extra/juce_gui_extra.h>
 
@@ -301,11 +300,11 @@ private:
     {
         const auto relativeBlockStart = jmax<int64>(0, blockStart - captureStart);
         const auto relativeBlockEnd = relativeBlockStart + numSamples;
-        auto cursor = inputEventCursor.load();
+        auto inputCursorIndex = inputEventCursor.load();
 
-        while (cursor < static_cast<int>(inputEvents.size()))
+        while (inputCursorIndex < static_cast<int>(inputEvents.size()))
         {
-            const auto& event = inputEvents[static_cast<size_t>(cursor)];
+            const auto& event = inputEvents[static_cast<size_t>(inputCursorIndex)];
             const auto eventSample = static_cast<int64>(
                 std::llround(event.seconds * sampleRate)
             );
@@ -320,10 +319,10 @@ private:
                 )
             );
             midiMessages.addEvent(event.message, sampleOffset);
-            ++cursor;
+            ++inputCursorIndex;
         }
 
-        inputEventCursor.store(cursor);
+        inputEventCursor.store(inputCursorIndex);
     }
 
     void collectOutputEvents(const MidiBuffer& midiMessages,
@@ -452,8 +451,11 @@ private:
             throw std::runtime_error("Could not create the captured MIDI file.");
         stream.setPosition(0);
         stream.truncate();
-        if (!output.writeTo(stream, 0) || !stream.flush())
+        if (!output.writeTo(stream, 0))
             throw std::runtime_error("Could not write the captured MIDI file.");
+        stream.flush();
+        if (stream.getStatus().failed())
+            throw std::runtime_error("Could not flush the captured MIDI file.");
         return noteOnCount;
     }
 
